@@ -1,7 +1,7 @@
 {
-  "name": "monkey-xxx-xxx",
+  "name": "monkey-kintone-batch-mention-research",
   "version": "0.0.1",
-  "description": "write description here",
+  "description": "monkey-kintone-batch-mention-research",
   "main": "",
   "scripts": {
     "start": "webpack serve --config ./config/webpack.dev.js",
@@ -12,18 +12,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourname/your-app.git"
+    "url": "git+https://github.com/forestsheep911/monkey-kintone-batch-mention-research.git"
   },
   "keywords": [
     "TamperMonkey",
     "TypeScript"
   ],
-  "author": "you",
+  "author": "bxu",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/yourname/your-app/issues"
+    "url": "https://github.com/forestsheep911/monkey-kintone-batch-mention-research/issues"
   },
-  "homepage": "https://github.com/yourname/your-app",
+  "homepage": "https://github.com/forestsheep911/monkey-kintone-batch-mention-research",
   "devDependencies": {
     "@babel/core": "^7.17.9",
     "@babel/preset-env": "^7.16.11",
