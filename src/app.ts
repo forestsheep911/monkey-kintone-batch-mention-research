@@ -1,5 +1,4 @@
 const app = () => {
-  console.log('monkey jumping on the bed.')
   const appendStringFormat =
     '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" href="{0}" data-mention-id="{1}" tabindex="-1" style="-webkit-user-modify: read-only;">@{2}</a>&nbsp;'
 
@@ -25,11 +24,11 @@ const app = () => {
     })
   }
 
-  function placeCaretAtEnd(areaDom: HTMLElement): void {
-    areaDom.focus()
+  function moveCursorToEnd(area: HTMLElement): void {
+    area.focus()
     if (typeof window.getSelection != 'undefined' && typeof document.createRange != 'undefined') {
       var range = document.createRange()
-      range.selectNodeContents(areaDom)
+      range.selectNodeContents(area)
       range.collapse(false)
       var sel = window.getSelection()
       sel?.removeAllRanges()
@@ -37,22 +36,22 @@ const app = () => {
     }
   }
 
-  function atinject(atMarkString: string): void {
+  function makeAllUserMentionMark(atMarkString: string): void {
     const finduserhref = document.querySelectorAll('.user-link-cybozu')
     if (finduserhref.length != 0) {
-      doloop(finduserhref, isNoti, atMarkString)
+      makeMentionMark(finduserhref, isNoti, atMarkString)
     }
 
     const myiframe = document.querySelector('iframe')
     if (myiframe) {
       const finduserhref = myiframe.contentDocument?.querySelectorAll('.user-link-cybozu')
       if (finduserhref) {
-        doloop(finduserhref, isNoti, atMarkString)
+        makeMentionMark(finduserhref, isNoti, atMarkString)
       }
     }
   }
 
-  function doloop(finduserhref: NodeListOf<Element>, isNoti: boolean, atMarkString: string): void {
+  function makeMentionMark(finduserhref: NodeListOf<Element>, isNoti: boolean, atMarkString: string): void {
     for (let i = 0; i < finduserhref.length; i++) {
       if (finduserhref[i].nextElementSibling) {
         continue
@@ -61,14 +60,10 @@ const app = () => {
       const path = (<HTMLLinkElement>finduserhref[i]).href.substring(
         newurl.protocol.length + newurl.hostname.length + 2,
       )
-      console.log(path)
-
       const photosrc = new URL((<HTMLImageElement>finduserhref[i].children[0]).src)
       const mentionid = photosrc.searchParams.get('id')
-      console.log(mentionid)
 
       const username = finduserhref[i].children[1].textContent
-      console.log(username)
 
       const ata = document.createElement('a')
       ata.style.marginLeft = '5px'
@@ -78,15 +73,13 @@ const app = () => {
         const replyInputArea = isNoti
           ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
           : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
-        // const replyinputarea
         if (replyInputArea) {
           const lasteles = replyInputArea.lastElementChild
-          console.log(lasteles)
 
           if (lasteles) {
             if (lasteles.nodeName === 'BR') {
               lasteles.insertAdjacentHTML('beforebegin', stringFormat(appendStringFormat, path, mentionid, username))
-              placeCaretAtEnd(replyInputArea)
+              moveCursorToEnd(replyInputArea)
             } else if (lasteles.nodeName === 'DIV') {
               const divbr = lasteles.lastElementChild
               if (divbr && divbr.nodeName === 'BR') {
@@ -94,17 +87,17 @@ const app = () => {
               } else {
                 lasteles.insertAdjacentHTML('beforeend', stringFormat(appendStringFormat, path, mentionid, username))
               }
-              placeCaretAtEnd(replyInputArea)
+              moveCursorToEnd(replyInputArea)
             } else {
               replyInputArea.insertAdjacentHTML(
                 'beforeend',
                 stringFormat(appendStringFormat, path, mentionid, username),
               )
-              placeCaretAtEnd(replyInputArea)
+              moveCursorToEnd(replyInputArea)
             }
           } else {
             replyInputArea.insertAdjacentHTML('beforeend', stringFormat(appendStringFormat, path, mentionid, username))
-            placeCaretAtEnd(replyInputArea)
+            moveCursorToEnd(replyInputArea)
           }
         }
       })
@@ -112,27 +105,87 @@ const app = () => {
     }
   }
 
-  type UserSelectFiledCodes = string[]
+  type UserSelectFiledCodes = { fieldcode: string; value: object; element?: HTMLElement; userinfo?: object[] }[]
   function getUserSelectElementByFieldType(record: any) {
-    const result: UserSelectFiledCodes = []
+    const pre: UserSelectFiledCodes = []
     for (const key in record) {
       if (record[key] && typeof record[key] === 'object') {
-        console.log(record[key])
+        // console.log(record[key])
         if (record[key].type === 'USER_SELECT') {
-          result.push(key)
+          pre.push({ fieldcode: key, value: record[key].value })
         }
       }
     }
-    return result
+    const rt = pre.map((item) => {
+      const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
+      const allUsersInBlock = element.querySelectorAll('.user-link-cybozu')
+      item.userinfo = [] // Initialize the userinfo array
+      for (let i = 0; i < allUsersInBlock.length; i++) {
+        if (allUsersInBlock[i].nextElementSibling) {
+          continue
+        }
+        const newurl = new URL((<HTMLLinkElement>allUsersInBlock[i]).href)
+        const path = (<HTMLLinkElement>allUsersInBlock[i]).href.substring(
+          newurl.protocol.length + newurl.hostname.length + 2,
+        )
+        const photosrc = new URL((<HTMLImageElement>allUsersInBlock[i].children[0]).src)
+        const mentionid = photosrc.searchParams.get('id')
+        const username = allUsersInBlock[i].children[1].textContent
+        item.userinfo.push({ path: path, mentionid: mentionid, username: username })
+      }
+      item.element = element
+      return item
+    })
+    return rt
   }
+
+  function addBatchMention(lasteles: Element, position: InsertPosition, usf: any) {
+    // loop usf
+    for (let item of usf) {
+      lasteles.insertAdjacentHTML(position, stringFormat(appendStringFormat, item.path, item.mentionid, item.username))
+    }
+  }
+
   kintone.events.on('app.record.detail.show', function (event) {
+    console.log('monkey jumping on detail.')
+    init()
+    // multiple user select processing
     const us = getUserSelectElementByFieldType(event.record)
     console.log(us)
-    const userSelectElements = us.map((key) => {
-      return event.record[key].value
+    const userSelectTitleElement = us[0]?.element?.previousElementSibling
+    const mentionMarka = document.createElement('a')
+    mentionMarka.style.marginLeft = '5px'
+    mentionMarka.innerText = '@'
+    mentionMarka.addEventListener('click', function () {
+      ;(replyBox as HTMLElement)?.focus()
+      const replyInputArea = isNoti
+        ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+        : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+      if (replyInputArea) {
+        const lasteles = replyInputArea.lastElementChild
+        for (let userSelectElement of us) {
+          if (lasteles) {
+            if (lasteles.nodeName === 'BR') {
+              addBatchMention(lasteles, 'beforebegin', userSelectElement.userinfo)
+            } else if (lasteles.nodeName === 'DIV') {
+              const divbr = lasteles.lastElementChild
+              if (divbr && divbr.nodeName === 'BR') {
+                addBatchMention(divbr, 'beforebegin', userSelectElement.userinfo)
+              } else {
+                addBatchMention(lasteles, 'beforeend', userSelectElement.userinfo)
+              }
+            } else {
+              addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+            }
+          } else {
+            addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+          }
+          moveCursorToEnd(replyInputArea)
+        }
+      }
     })
-    init()
-    atinject('@')
+    userSelectTitleElement?.appendChild(mentionMarka)
+    makeAllUserMentionMark('@')
     return event
   })
 }
