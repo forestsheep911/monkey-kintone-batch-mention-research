@@ -1,6 +1,8 @@
 const app = () => {
-  const appendStringFormat =
+  const appendUserStringFormat =
     '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" href="{0}" data-mention-id="{1}" tabindex="-1" style="-webkit-user-modify: read-only;">@{2}</a>&nbsp;'
+  const appendOrgStringFormat =
+    '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" data-org-mention-id="{0}" data-mention-code="{1}" data-mention-icon="" data-mention-name="{2}" tabindex="-1" style="-webkit-user-modify: read-only;" href="#">@{2}</a>&nbsp;'
 
   let isNoti = false
   let replyBox: undefined | HTMLElement = undefined
@@ -78,25 +80,34 @@ const app = () => {
 
           if (lasteles) {
             if (lasteles.nodeName === 'BR') {
-              lasteles.insertAdjacentHTML('beforebegin', stringFormat(appendStringFormat, path, mentionid, username))
+              lasteles.insertAdjacentHTML(
+                'beforebegin',
+                stringFormat(appendUserStringFormat, path, mentionid, username),
+              )
               moveCursorToEnd(replyInputArea)
             } else if (lasteles.nodeName === 'DIV') {
               const divbr = lasteles.lastElementChild
               if (divbr && divbr.nodeName === 'BR') {
-                divbr.insertAdjacentHTML('beforebegin', stringFormat(appendStringFormat, path, mentionid, username))
+                divbr.insertAdjacentHTML('beforebegin', stringFormat(appendUserStringFormat, path, mentionid, username))
               } else {
-                lasteles.insertAdjacentHTML('beforeend', stringFormat(appendStringFormat, path, mentionid, username))
+                lasteles.insertAdjacentHTML(
+                  'beforeend',
+                  stringFormat(appendUserStringFormat, path, mentionid, username),
+                )
               }
               moveCursorToEnd(replyInputArea)
             } else {
               replyInputArea.insertAdjacentHTML(
                 'beforeend',
-                stringFormat(appendStringFormat, path, mentionid, username),
+                stringFormat(appendUserStringFormat, path, mentionid, username),
               )
               moveCursorToEnd(replyInputArea)
             }
           } else {
-            replyInputArea.insertAdjacentHTML('beforeend', stringFormat(appendStringFormat, path, mentionid, username))
+            replyInputArea.insertAdjacentHTML(
+              'beforeend',
+              stringFormat(appendUserStringFormat, path, mentionid, username),
+            )
             moveCursorToEnd(replyInputArea)
           }
         }
@@ -139,19 +150,85 @@ const app = () => {
     return rt
   }
 
+  type OrgSelectFiledCodes = {
+    fieldcode: string
+    value: { id?: string; code: string; name: string }[]
+    element?: HTMLElement
+    userinfo?: object[]
+  }[]
+  async function getOrgSelectElementByFieldType(record: any) {
+    const pre: OrgSelectFiledCodes = []
+    for (const key in record) {
+      if (record[key] && typeof record[key] === 'object') {
+        // console.log(record[key])
+        if (record[key].type === 'ORGANIZATION_SELECT') {
+          pre.push({ fieldcode: key, value: record[key].value })
+        }
+      }
+    }
+    const rt = await Promise.all(
+      pre.map(async (item) => {
+        // console.log('item1', item)
+        const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
+        item.element = element
+        // initialize the id for each org
+        // loop value
+        item.value = await Promise.all(
+          item.value.map(async (v) => {
+            v.id = await getOrgIdbyCode(v.code)
+            return v
+          }),
+        )
+        // console.log('item2', item)
+        return item
+      }),
+    )
+    // console.log('rt', rt)
+
+    return rt
+  }
+
   function addBatchMention(lasteles: Element, position: InsertPosition, usf: any) {
     // loop usf
     for (let item of usf) {
-      lasteles.insertAdjacentHTML(position, stringFormat(appendStringFormat, item.path, item.mentionid, item.username))
+      lasteles.insertAdjacentHTML(
+        position,
+        stringFormat(appendUserStringFormat, item.path, item.mentionid, item.username),
+      )
     }
   }
 
-  kintone.events.on('app.record.detail.show', function (event) {
+  async function getOrgIdbyCode(code: string) {
+    // const params = `ids[0]=${code}`
+    // const resp = await kintone.api(kintone.api.url('/v1/organizations.json', true), 'GET', params)
+
+    const myHeaders = new Headers()
+    myHeaders.append('X-Requested-With', kintone.getRequestToken())
+    myHeaders.append('Content-Type', 'text/plain')
+    const requestOptions: RequestInit = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow' as RequestRedirect, // Update the type of redirect property
+    }
+    try {
+      const response = await fetch(`/v1/organizations.json?codes[0]=${code}`, requestOptions)
+      const result = await response.json()
+      console.log(result)
+      return result.organizations[0].id
+    } catch (error) {
+      console.log('error', error)
+    }
+  }
+
+  kintone.events.on('app.record.detail.show', async function (event) {
     console.log('monkey jumping on detail.')
     init()
+    // org select processing
+    const os = await getOrgSelectElementByFieldType(event.record)
+    console.log(os)
     // multiple user select processing
     const us = getUserSelectElementByFieldType(event.record)
-    console.log(us)
+    // console.log(us)
     const userSelectTitleElement = us[0]?.element?.previousElementSibling
     const mentionMarka = document.createElement('a')
     mentionMarka.style.marginLeft = '5px'
