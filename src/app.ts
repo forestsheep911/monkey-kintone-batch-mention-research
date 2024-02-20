@@ -1,6 +1,6 @@
 const app = () => {
   const appendUserStringFormat =
-    '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" href="{0}" data-mention-id="{1}" tabindex="-1" style="-webkit-user-modify: read-only;">@{2}</a>&nbsp;'
+    '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" href="/k/#/people/user/{0}" data-mention-id="{1}" tabindex="-1" style="-webkit-user-modify: read-only;">@{2}</a>&nbsp;'
   const appendOrgStringFormat =
     '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" data-org-mention-id="{0}" data-mention-code="{1}" data-mention-icon="" data-mention-name="{2}" tabindex="-1" style="-webkit-user-modify: read-only;" href="#">@{2}</a>&nbsp;'
 
@@ -121,7 +121,7 @@ const app = () => {
       const userSelectTitleElement = orgSelectElement?.element?.previousElementSibling
       const mentionMarka = document.createElement('a')
       mentionMarka.style.marginLeft = '5px'
-      mentionMarka.innerText = '@All'
+      mentionMarka.innerText = '@all'
       mentionMarka.addEventListener('click', function () {
         ;(replyBox as HTMLElement)?.focus()
         const replyInputArea = isNoti
@@ -152,12 +152,12 @@ const app = () => {
     })
   }
 
-  function makeMentionMarkForUserSelect(us: UserSelectFiledCodes) {
+  function makeMentionMarkForUserSelect(us: UserSelectFiledCodes[]) {
     us.forEach((userSelectElement) => {
       const userSelectTitleElement = userSelectElement?.element?.previousElementSibling
       const mentionMarka = document.createElement('a')
       mentionMarka.style.marginLeft = '5px'
-      mentionMarka.innerText = '@All'
+      mentionMarka.innerText = '@all'
       mentionMarka.addEventListener('click', function () {
         ;(replyBox as HTMLElement)?.focus()
         const replyInputArea = isNoti
@@ -167,19 +167,19 @@ const app = () => {
           const lasteles = replyInputArea.lastElementChild
           if (lasteles) {
             if (lasteles.nodeName === 'BR') {
-              addBatchMention(lasteles, 'beforebegin', userSelectElement.userinfo)
+              addBatchMentionForUser(lasteles, 'beforebegin', userSelectElement)
             } else if (lasteles.nodeName === 'DIV') {
               const divbr = lasteles.lastElementChild
               if (divbr && divbr.nodeName === 'BR') {
-                addBatchMention(divbr, 'beforebegin', userSelectElement.userinfo)
+                addBatchMentionForUser(divbr, 'beforebegin', userSelectElement)
               } else {
-                addBatchMention(lasteles, 'beforeend', userSelectElement.userinfo)
+                addBatchMentionForUser(lasteles, 'beforeend', userSelectElement)
               }
             } else {
-              addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+              addBatchMentionForUser(replyInputArea, 'beforeend', userSelectElement)
             }
           } else {
-            addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+            addBatchMentionForUser(replyInputArea, 'beforeend', userSelectElement)
           }
           moveCursorToEnd(replyInputArea)
         }
@@ -189,9 +189,13 @@ const app = () => {
   }
 
   // todo 这里定义的userinfo信息和value有点重复，应该像org那样，加一个mentionid，这样code name id都有了，以后改进
-  type UserSelectFiledCodes = { fieldcode: string; value: object; element?: HTMLElement; userinfo?: object[] }[]
-  function getUserSelectElementByFieldType(record: any) {
-    const pre: UserSelectFiledCodes = []
+  type UserSelectFiledCodes = {
+    fieldcode: string
+    value: { id?: string; code: string; name: string }[]
+    element?: HTMLElement
+  }
+  async function getUserSelectElementByFieldType(record: any) {
+    const pre: UserSelectFiledCodes[] = []
     for (const key in record) {
       if (record[key] && typeof record[key] === 'object') {
         // console.log(record[key])
@@ -200,27 +204,21 @@ const app = () => {
         }
       }
     }
-    const rt = pre.map((item) => {
-      const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
-      const allUsersInBlock = element.querySelectorAll('.user-link-cybozu')
-      item.userinfo = [] // Initialize the userinfo array
-      for (let i = 0; i < allUsersInBlock.length; i++) {
-        if (allUsersInBlock[i].nextElementSibling) {
-          continue
-        }
-        const newurl = new URL((<HTMLLinkElement>allUsersInBlock[i]).href)
-        const path = (<HTMLLinkElement>allUsersInBlock[i]).href.substring(
-          newurl.protocol.length + newurl.hostname.length + 2,
+    const rt = await Promise.all(
+      pre.map(async (item) => {
+        // console.log('item1', item)
+        const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
+        item.element = element
+        // initialize the id for each org
+        item.value = await Promise.all(
+          item.value.map(async (v) => {
+            v.id = await getOrgIdbyCode(v.code)
+            return v
+          }),
         )
-        const photosrc = new URL((<HTMLImageElement>allUsersInBlock[i].children[0]).src)
-        // Todo 这里是根据图片的src来获取mentionid，但对 Administator 这个用户来说，他的图片是默认的，没有mentionid，所以这里会得到null，id是null，回复就会报错，所以最好是根据code来获取id，将来需要改进
-        const mentionid = photosrc.searchParams.get('id')
-        const username = allUsersInBlock[i].children[1].textContent
-        item.userinfo.push({ path: path, mentionid: mentionid, username: username })
-      }
-      item.element = element
-      return item
-    })
+        return item
+      }),
+    )
     return rt
   }
 
@@ -245,34 +243,49 @@ const app = () => {
         const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
         item.element = element
         // initialize the id for each org
-        // loop value
         item.value = await Promise.all(
           item.value.map(async (v) => {
             v.id = await getOrgIdbyCode(v.code)
             return v
           }),
         )
-        // console.log('item2', item)
         return item
       }),
     )
-    // console.log('rt', rt)
 
     return rt
   }
 
-  function addBatchMention(lasteles: Element, position: InsertPosition, usf: any) {
-    for (let item of usf) {
-      lasteles.insertAdjacentHTML(
-        position,
-        stringFormat(appendUserStringFormat, item.path, item.mentionid, item.username),
-      )
+  function addBatchMentionForUser(lasteles: Element, position: InsertPosition, users: UserSelectFiledCodes) {
+    for (let item of users.value) {
+      lasteles.insertAdjacentHTML(position, stringFormat(appendUserStringFormat, item.code, item.id, item.name))
     }
   }
 
   function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledCode) {
     for (let item of orgs.value) {
       lasteles.insertAdjacentHTML(position, stringFormat(appendOrgStringFormat, item.id, item.code, item.name))
+    }
+  }
+
+  async function getUserIdbyCode(code: string) {
+    const myHeaders = new Headers()
+    myHeaders.append('X-Requested-With', kintone.getRequestToken())
+    myHeaders.append('Content-Type', 'text/plain')
+    const requestOptions: RequestInit = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow' as RequestRedirect, // Update the type of redirect property
+    }
+    try {
+      const response = await fetch(`/v1/users.json?codes[0]=${code}`, requestOptions)
+      const result = await response.json()
+      if (result.users.length === 0) {
+        throw new Error('No user found')
+      }
+      return result.users[0].id
+    } catch (error) {
+      return ''
     }
   }
 
@@ -297,17 +310,23 @@ const app = () => {
     }
   }
 
+  async function processUserSelectField(record: any) {
+    const us = await getUserSelectElementByFieldType(record)
+    console.log('select user info', us)
+    makeMentionMarkForUserSelect(us)
+  }
+
+  async function processOrgSelectField(record: any) {
+    const os = await getOrgSelectElementByFieldType(record)
+    console.log('orginfo', os)
+    makeMentionMarkForOrgSelect(os)
+  }
+
   kintone.events.on('app.record.detail.show', async function (event) {
     console.log('monkey jumping on detail.')
     init()
-    // org select processing
-    const os = await getOrgSelectElementByFieldType(event.record)
-    console.log('orginfo', os)
-    makeMentionMarkForOrgSelect(os)
-    // multiple user select processing
-    const us = getUserSelectElementByFieldType(event.record)
-    console.log('userinfo', us)
-    makeMentionMarkForUserSelect(us)
+    processUserSelectField(event.record)
+    processOrgSelectField(event.record)
     // find all user mention and make mark
     makeAllUserMentionMark('@')
     return event
