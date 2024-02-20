@@ -116,6 +116,79 @@ const app = () => {
     }
   }
 
+  function makeMentionMarkForOrgSelect(os: OrgSelectFiledCode[]) {
+    os.forEach((orgSelectElement) => {
+      const userSelectTitleElement = orgSelectElement?.element?.previousElementSibling
+      const mentionMarka = document.createElement('a')
+      mentionMarka.style.marginLeft = '5px'
+      mentionMarka.innerText = '@All'
+      mentionMarka.addEventListener('click', function () {
+        ;(replyBox as HTMLElement)?.focus()
+        const replyInputArea = isNoti
+          ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+          : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+        if (replyInputArea) {
+          const lasteles = replyInputArea.lastElementChild
+          if (lasteles) {
+            if (lasteles.nodeName === 'BR') {
+              addBatchMentionForOrg(lasteles, 'beforebegin', orgSelectElement)
+            } else if (lasteles.nodeName === 'DIV') {
+              const divbr = lasteles.lastElementChild
+              if (divbr && divbr.nodeName === 'BR') {
+                addBatchMentionForOrg(divbr, 'beforebegin', orgSelectElement)
+              } else {
+                addBatchMentionForOrg(lasteles, 'beforeend', orgSelectElement)
+              }
+            } else {
+              addBatchMentionForOrg(replyInputArea, 'beforeend', orgSelectElement)
+            }
+          } else {
+            addBatchMentionForOrg(replyInputArea, 'beforeend', orgSelectElement)
+          }
+          moveCursorToEnd(replyInputArea)
+        }
+      })
+      userSelectTitleElement?.appendChild(mentionMarka)
+    })
+  }
+
+  function makeMentionMarkForUserSelect(us: UserSelectFiledCodes) {
+    us.forEach((userSelectElement) => {
+      const userSelectTitleElement = userSelectElement?.element?.previousElementSibling
+      const mentionMarka = document.createElement('a')
+      mentionMarka.style.marginLeft = '5px'
+      mentionMarka.innerText = '@All'
+      mentionMarka.addEventListener('click', function () {
+        ;(replyBox as HTMLElement)?.focus()
+        const replyInputArea = isNoti
+          ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+          : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+        if (replyInputArea) {
+          const lasteles = replyInputArea.lastElementChild
+          if (lasteles) {
+            if (lasteles.nodeName === 'BR') {
+              addBatchMention(lasteles, 'beforebegin', userSelectElement.userinfo)
+            } else if (lasteles.nodeName === 'DIV') {
+              const divbr = lasteles.lastElementChild
+              if (divbr && divbr.nodeName === 'BR') {
+                addBatchMention(divbr, 'beforebegin', userSelectElement.userinfo)
+              } else {
+                addBatchMention(lasteles, 'beforeend', userSelectElement.userinfo)
+              }
+            } else {
+              addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+            }
+          } else {
+            addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
+          }
+          moveCursorToEnd(replyInputArea)
+        }
+      })
+      userSelectTitleElement?.appendChild(mentionMarka)
+    })
+  }
+
+  // todo 这里定义的userinfo信息和value有点重复，应该像org那样，加一个mentionid，这样code name id都有了，以后改进
   type UserSelectFiledCodes = { fieldcode: string; value: object; element?: HTMLElement; userinfo?: object[] }[]
   function getUserSelectElementByFieldType(record: any) {
     const pre: UserSelectFiledCodes = []
@@ -140,6 +213,7 @@ const app = () => {
           newurl.protocol.length + newurl.hostname.length + 2,
         )
         const photosrc = new URL((<HTMLImageElement>allUsersInBlock[i].children[0]).src)
+        // Todo 这里是根据图片的src来获取mentionid，但对 Administator 这个用户来说，他的图片是默认的，没有mentionid，所以这里会得到null，id是null，回复就会报错，所以最好是根据code来获取id，将来需要改进
         const mentionid = photosrc.searchParams.get('id')
         const username = allUsersInBlock[i].children[1].textContent
         item.userinfo.push({ path: path, mentionid: mentionid, username: username })
@@ -150,14 +224,13 @@ const app = () => {
     return rt
   }
 
-  type OrgSelectFiledCodes = {
+  type OrgSelectFiledCode = {
     fieldcode: string
     value: { id?: string; code: string; name: string }[]
     element?: HTMLElement
-    userinfo?: object[]
-  }[]
+  }
   async function getOrgSelectElementByFieldType(record: any) {
-    const pre: OrgSelectFiledCodes = []
+    const pre: OrgSelectFiledCode[] = []
     for (const key in record) {
       if (record[key] && typeof record[key] === 'object') {
         // console.log(record[key])
@@ -189,7 +262,6 @@ const app = () => {
   }
 
   function addBatchMention(lasteles: Element, position: InsertPosition, usf: any) {
-    // loop usf
     for (let item of usf) {
       lasteles.insertAdjacentHTML(
         position,
@@ -198,10 +270,13 @@ const app = () => {
     }
   }
 
-  async function getOrgIdbyCode(code: string) {
-    // const params = `ids[0]=${code}`
-    // const resp = await kintone.api(kintone.api.url('/v1/organizations.json', true), 'GET', params)
+  function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledCode) {
+    for (let item of orgs.value) {
+      lasteles.insertAdjacentHTML(position, stringFormat(appendOrgStringFormat, item.id, item.code, item.name))
+    }
+  }
 
+  async function getOrgIdbyCode(code: string) {
     const myHeaders = new Headers()
     myHeaders.append('X-Requested-With', kintone.getRequestToken())
     myHeaders.append('Content-Type', 'text/plain')
@@ -213,10 +288,12 @@ const app = () => {
     try {
       const response = await fetch(`/v1/organizations.json?codes[0]=${code}`, requestOptions)
       const result = await response.json()
-      console.log(result)
+      if (result.organizations.length === 0) {
+        throw new Error('No organization found')
+      }
       return result.organizations[0].id
     } catch (error) {
-      console.log('error', error)
+      return ''
     }
   }
 
@@ -225,43 +302,13 @@ const app = () => {
     init()
     // org select processing
     const os = await getOrgSelectElementByFieldType(event.record)
-    console.log(os)
+    console.log('orginfo', os)
+    makeMentionMarkForOrgSelect(os)
     // multiple user select processing
     const us = getUserSelectElementByFieldType(event.record)
-    // console.log(us)
-    const userSelectTitleElement = us[0]?.element?.previousElementSibling
-    const mentionMarka = document.createElement('a')
-    mentionMarka.style.marginLeft = '5px'
-    mentionMarka.innerText = '@'
-    mentionMarka.addEventListener('click', function () {
-      ;(replyBox as HTMLElement)?.focus()
-      const replyInputArea = isNoti
-        ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
-        : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
-      if (replyInputArea) {
-        const lasteles = replyInputArea.lastElementChild
-        for (let userSelectElement of us) {
-          if (lasteles) {
-            if (lasteles.nodeName === 'BR') {
-              addBatchMention(lasteles, 'beforebegin', userSelectElement.userinfo)
-            } else if (lasteles.nodeName === 'DIV') {
-              const divbr = lasteles.lastElementChild
-              if (divbr && divbr.nodeName === 'BR') {
-                addBatchMention(divbr, 'beforebegin', userSelectElement.userinfo)
-              } else {
-                addBatchMention(lasteles, 'beforeend', userSelectElement.userinfo)
-              }
-            } else {
-              addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
-            }
-          } else {
-            addBatchMention(replyInputArea, 'beforeend', userSelectElement.userinfo)
-          }
-          moveCursorToEnd(replyInputArea)
-        }
-      }
-    })
-    userSelectTitleElement?.appendChild(mentionMarka)
+    console.log('userinfo', us)
+    makeMentionMarkForUserSelect(us)
+    // find all user mention and make mark
     makeAllUserMentionMark('@')
     return event
   })
