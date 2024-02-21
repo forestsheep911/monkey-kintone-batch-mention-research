@@ -116,8 +116,58 @@ const app = () => {
     }
   }
 
-  function makeMentionMarkForOrgSelect(os: OrgSelectFiledCode[]) {
-    os.forEach((orgSelectElement) => {
+  function makeMentionMarkForOrgs(orgs: OrgSelectFiledInfo[]) {
+    for (let org of orgs) {
+      org.element?.querySelectorAll('li > span').forEach((orgElement) => {
+        const mentionMarka = document.createElement('a')
+        mentionMarka.style.marginLeft = '5px'
+        mentionMarka.innerText = '@'
+        let matchedValue: {
+          id?: string | undefined
+          code: string
+          name: string
+        }
+        for (let item of org.value) {
+          if (orgElement.textContent === item.name) {
+            matchedValue = item
+            break
+          }
+        }
+        mentionMarka.addEventListener('click', function () {
+          ;(replyBox as HTMLElement)?.focus()
+          const replyInputArea = isNoti
+            ? (document
+                .querySelector('iframe')
+                ?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+            : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+          if (replyInputArea) {
+            const lasteles = replyInputArea.lastElementChild
+            if (lasteles) {
+              if (lasteles.nodeName === 'BR') {
+                addMentionForOrg(lasteles, 'beforebegin', matchedValue)
+              } else if (lasteles.nodeName === 'DIV') {
+                const divbr = lasteles.lastElementChild
+                if (divbr && divbr.nodeName === 'BR') {
+                  addMentionForOrg(divbr, 'beforebegin', matchedValue)
+                } else {
+                  addMentionForOrg(lasteles, 'beforeend', matchedValue)
+                }
+              } else {
+                addMentionForOrg(replyInputArea, 'beforeend', matchedValue)
+              }
+            } else {
+              addMentionForOrg(replyInputArea, 'beforeend', matchedValue)
+            }
+            moveCursorToEnd(replyInputArea)
+          }
+        })
+        orgElement?.appendChild(mentionMarka)
+      })
+    }
+  }
+
+  function makeMentionMarkForOrgSelect(orgs: OrgSelectFiledInfo[]) {
+    orgs.forEach((orgSelectElement) => {
       const userSelectTitleElement = orgSelectElement?.element?.previousElementSibling
       const mentionMarka = document.createElement('a')
       mentionMarka.style.marginLeft = '5px'
@@ -152,7 +202,7 @@ const app = () => {
     })
   }
 
-  function makeMentionMarkForUserSelect(us: UserSelectFiledCodes[]) {
+  function makeMentionMarkForUserSelect(us: UserSelectFiledInfo[]) {
     us.forEach((userSelectElement) => {
       const userSelectTitleElement = userSelectElement?.element?.previousElementSibling
       const mentionMarka = document.createElement('a')
@@ -188,14 +238,13 @@ const app = () => {
     })
   }
 
-  // todo 这里定义的userinfo信息和value有点重复，应该像org那样，加一个mentionid，这样code name id都有了，以后改进
-  type UserSelectFiledCodes = {
+  type UserSelectFiledInfo = {
     fieldcode: string
     value: { id?: string; code: string; name: string }[]
     element?: HTMLElement
   }
   async function getUserSelectElementByFieldType(record: any) {
-    const pre: UserSelectFiledCodes[] = []
+    const pre: UserSelectFiledInfo[] = []
     for (const key in record) {
       if (record[key] && typeof record[key] === 'object') {
         // console.log(record[key])
@@ -222,13 +271,13 @@ const app = () => {
     return rt
   }
 
-  type OrgSelectFiledCode = {
+  type OrgSelectFiledInfo = {
     fieldcode: string
     value: { id?: string; code: string; name: string }[]
     element?: HTMLElement
   }
   async function getOrgSelectElementByFieldType(record: any) {
-    const pre: OrgSelectFiledCode[] = []
+    const pre: OrgSelectFiledInfo[] = []
     for (const key in record) {
       if (record[key] && typeof record[key] === 'object') {
         // console.log(record[key])
@@ -256,15 +305,27 @@ const app = () => {
     return rt
   }
 
-  function addBatchMentionForUser(lasteles: Element, position: InsertPosition, users: UserSelectFiledCodes) {
+  function addBatchMentionForUser(lasteles: Element, position: InsertPosition, users: UserSelectFiledInfo) {
     for (let item of users.value) {
       lasteles.insertAdjacentHTML(position, stringFormat(appendUserStringFormat, item.code, item.id, item.name))
     }
   }
 
-  function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledCode) {
+  function addMentionForOrg(
+    lasteles: Element,
+    position: InsertPosition,
+    orgValue: { id?: string; code: string; name: string },
+  ) {
+    lasteles.insertAdjacentHTML(
+      position,
+      stringFormat(appendOrgStringFormat, orgValue.id, orgValue.code, orgValue.name),
+    )
+  }
+
+  function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledInfo) {
     for (let item of orgs.value) {
-      lasteles.insertAdjacentHTML(position, stringFormat(appendOrgStringFormat, item.id, item.code, item.name))
+      addMentionForOrg(lasteles, position, item)
+      // lasteles.insertAdjacentHTML(position, stringFormat(appendOrgStringFormat, item.id, item.code, item.name))
     }
   }
 
@@ -320,6 +381,7 @@ const app = () => {
     const os = await getOrgSelectElementByFieldType(record)
     console.log('orginfo', os)
     makeMentionMarkForOrgSelect(os)
+    makeMentionMarkForOrgs(os)
   }
 
   kintone.events.on('app.record.detail.show', async function (event) {
