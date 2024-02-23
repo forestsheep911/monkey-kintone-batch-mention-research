@@ -3,6 +3,8 @@ const app = () => {
     '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" href="/k/#/people/user/{0}" data-mention-id="{1}" tabindex="-1" style="-webkit-user-modify: read-only;">@{2}</a>&nbsp;'
   const appendOrgStringFormat =
     '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" data-org-mention-id="{0}" data-mention-code="{1}" data-mention-icon="" data-mention-name="{2}" tabindex="-1" style="-webkit-user-modify: read-only;" href="#">@{2}</a>&nbsp;'
+  const appendGroupStringFormat =
+    '<a class="ocean-ui-plugin-mention-user ocean-ui-plugin-linkbubble-no" data-group-mention-id="{0}" data-mention-code="{1}" data-mention-icon data-mention-name="{2}" tabindex="-1" style="-webkit-user-modify: read-only;" href="#">@{2}</a>&nbsp;'
 
   let isNoti = false
   let replyBox: undefined | HTMLElement = undefined
@@ -166,6 +168,56 @@ const app = () => {
     }
   }
 
+  function makeMentionMarkForGroups(orgs: GroupSelectFiledInfo[]) {
+    for (let org of orgs) {
+      org.element?.querySelectorAll('li > span').forEach((orgElement) => {
+        const mentionMarka = document.createElement('a')
+        mentionMarka.style.marginLeft = '5px'
+        mentionMarka.innerText = '@'
+        let matchedValue: {
+          id?: string | undefined
+          code: string
+          name: string
+        }
+        for (let item of org.value) {
+          if (orgElement.textContent === item.name) {
+            matchedValue = item
+            break
+          }
+        }
+        mentionMarka.addEventListener('click', function () {
+          ;(replyBox as HTMLElement)?.focus()
+          const replyInputArea = isNoti
+            ? (document
+                .querySelector('iframe')
+                ?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+            : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+          if (replyInputArea) {
+            const lasteles = replyInputArea.lastElementChild
+            if (lasteles) {
+              if (lasteles.nodeName === 'BR') {
+                addMentionForGroup(lasteles, 'beforebegin', matchedValue)
+              } else if (lasteles.nodeName === 'DIV') {
+                const divbr = lasteles.lastElementChild
+                if (divbr && divbr.nodeName === 'BR') {
+                  addMentionForGroup(divbr, 'beforebegin', matchedValue)
+                } else {
+                  addMentionForGroup(lasteles, 'beforeend', matchedValue)
+                }
+              } else {
+                addMentionForGroup(replyInputArea, 'beforeend', matchedValue)
+              }
+            } else {
+              addMentionForGroup(replyInputArea, 'beforeend', matchedValue)
+            }
+            moveCursorToEnd(replyInputArea)
+          }
+        })
+        orgElement?.appendChild(mentionMarka)
+      })
+    }
+  }
+
   function makeMentionMarkForOrgSelect(orgs: OrgSelectFiledInfo[]) {
     orgs.forEach((orgSelectElement) => {
       const userSelectTitleElement = orgSelectElement?.element?.previousElementSibling
@@ -194,6 +246,42 @@ const app = () => {
             }
           } else {
             addBatchMentionForOrg(replyInputArea, 'beforeend', orgSelectElement)
+          }
+          moveCursorToEnd(replyInputArea)
+        }
+      })
+      userSelectTitleElement?.appendChild(mentionMarka)
+    })
+  }
+
+  function makeMentionMarkForGroupSelect(orgs: OrgSelectFiledInfo[]) {
+    orgs.forEach((orgSelectElement) => {
+      const userSelectTitleElement = orgSelectElement?.element?.previousElementSibling
+      const mentionMarka = document.createElement('a')
+      mentionMarka.style.marginLeft = '5px'
+      mentionMarka.innerText = '@all'
+      mentionMarka.addEventListener('click', function () {
+        ;(replyBox as HTMLElement)?.focus()
+        const replyInputArea = isNoti
+          ? (document.querySelector('iframe')?.contentDocument?.querySelector('.ocean-ui-editor-field') as HTMLElement)
+          : (document.querySelector('.ocean-ui-editor-field') as HTMLElement)
+        if (replyInputArea) {
+          const lasteles = replyInputArea.lastElementChild
+          if (lasteles) {
+            if (lasteles.nodeName === 'BR') {
+              addBatchMentionForGroup(lasteles, 'beforebegin', orgSelectElement)
+            } else if (lasteles.nodeName === 'DIV') {
+              const divbr = lasteles.lastElementChild
+              if (divbr && divbr.nodeName === 'BR') {
+                addBatchMentionForGroup(divbr, 'beforebegin', orgSelectElement)
+              } else {
+                addBatchMentionForGroup(lasteles, 'beforeend', orgSelectElement)
+              }
+            } else {
+              addBatchMentionForGroup(replyInputArea, 'beforeend', orgSelectElement)
+            }
+          } else {
+            addBatchMentionForGroup(replyInputArea, 'beforeend', orgSelectElement)
           }
           moveCursorToEnd(replyInputArea)
         }
@@ -303,7 +391,39 @@ const app = () => {
         return item
       }),
     )
+    return rt
+  }
 
+  type GroupSelectFiledInfo = {
+    fieldcode: string
+    value: { id?: string; code: string; name: string }[]
+    element?: HTMLElement
+  }
+  async function getGroupSelectElementByFieldType(record: any) {
+    const pre: GroupSelectFiledInfo[] = []
+    for (const key in record) {
+      if (record[key] && typeof record[key] === 'object') {
+        // console.log(record[key])
+        if (record[key].type === 'GROUP_SELECT') {
+          pre.push({ fieldcode: key, value: record[key].value })
+        }
+      }
+    }
+    const rt = await Promise.all(
+      pre.map(async (item) => {
+        // console.log('item1', item)
+        const element = kintone.app.record.getFieldElement(item.fieldcode) as HTMLElement
+        item.element = element
+        // initialize the id for each org
+        item.value = await Promise.all(
+          item.value.map(async (v) => {
+            v.id = await getGroupIdbyCode(v.code)
+            return v
+          }),
+        )
+        return item
+      }),
+    )
     return rt
   }
 
@@ -323,11 +443,25 @@ const app = () => {
       stringFormat(appendOrgStringFormat, orgValue.id, orgValue.code, orgValue.name),
     )
   }
+  function addMentionForGroup(
+    lasteles: Element,
+    position: InsertPosition,
+    orgValue: { id?: string; code: string; name: string },
+  ) {
+    lasteles.insertAdjacentHTML(
+      position,
+      stringFormat(appendGroupStringFormat, orgValue.id, orgValue.code, orgValue.name),
+    )
+  }
 
   function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledInfo) {
     for (let item of orgs.value) {
       addMentionForOrg(lasteles, position, item)
-      // lasteles.insertAdjacentHTML(position, stringFormat(appendOrgStringFormat, item.id, item.code, item.name))
+    }
+  }
+  function addBatchMentionForGroup(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledInfo) {
+    for (let item of orgs.value) {
+      addMentionForGroup(lasteles, position, item)
     }
   }
 
@@ -372,6 +506,26 @@ const app = () => {
       return ''
     }
   }
+  async function getGroupIdbyCode(code: string) {
+    const myHeaders = new Headers()
+    myHeaders.append('X-Requested-With', kintone.getRequestToken())
+    myHeaders.append('Content-Type', 'text/plain')
+    const requestOptions: RequestInit = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow' as RequestRedirect, // Update the type of redirect property
+    }
+    try {
+      const response = await fetch(`/v1/groups.json?codes[0]=${code}`, requestOptions)
+      const result = await response.json()
+      if (result.groups.length === 0) {
+        throw new Error('No group found')
+      }
+      return result.groups[0].id
+    } catch (error) {
+      return ''
+    }
+  }
 
   async function processUserSelectField(record: any) {
     const us = await getUserSelectElementByFieldType(record)
@@ -385,12 +539,19 @@ const app = () => {
     makeMentionMarkForOrgSelect(os)
     makeMentionMarkForOrgs(os)
   }
+  async function processGroupSelectField(record: any) {
+    const gs = await getGroupSelectElementByFieldType(record)
+    console.log('orginfo', gs)
+    makeMentionMarkForGroupSelect(gs)
+    makeMentionMarkForGroups(gs)
+  }
 
   kintone.events.on('app.record.detail.show', async function (event) {
     console.log('monkey jumping on detail.')
     init()
     processUserSelectField(event.record)
     processOrgSelectField(event.record)
+    processGroupSelectField(event.record)
     // find all user mention and make mark
     makeAllUserMentionMark('@')
     return event
