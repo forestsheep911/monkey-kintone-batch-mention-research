@@ -261,7 +261,9 @@ const app = () => {
         // initialize the id for each org
         item.value = await Promise.all(
           item.value.map(async (v) => {
-            v.id = await getOrgIdbyCode(v.code)
+            v.id = await getUserIdbyCode(v.code)
+            console.log('vvv', v)
+
             return v
           }),
         )
