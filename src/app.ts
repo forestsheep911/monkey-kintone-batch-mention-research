@@ -31,10 +31,10 @@ const app = () => {
   function moveCursorToEnd(area: HTMLElement): void {
     area.focus()
     if (typeof window.getSelection != 'undefined' && typeof document.createRange != 'undefined') {
-      var range = document.createRange()
+      const range = document.createRange()
       range.selectNodeContents(area)
       range.collapse(false)
-      var sel = window.getSelection()
+      const sel = window.getSelection()
       sel?.removeAllRanges()
       sel?.addRange(range)
     }
@@ -119,7 +119,7 @@ const app = () => {
   }
 
   function makeMentionMarkForOrgs(orgs: OrgSelectFiledInfo[]) {
-    for (let org of orgs) {
+    for (const org of orgs) {
       org.element?.querySelectorAll('li > span').forEach((orgElement) => {
         const mentionMarka = document.createElement('a')
         mentionMarka.style.marginLeft = '5px'
@@ -129,7 +129,7 @@ const app = () => {
           code: string
           name: string
         }
-        for (let item of org.value) {
+        for (const item of org.value) {
           if (orgElement.textContent === item.name) {
             matchedValue = item
             break
@@ -169,7 +169,7 @@ const app = () => {
   }
 
   function makeMentionMarkForGroups(orgs: GroupSelectFiledInfo[]) {
-    for (let org of orgs) {
+    for (const org of orgs) {
       org.element?.querySelectorAll('li > span').forEach((orgElement) => {
         const mentionMarka = document.createElement('a')
         mentionMarka.style.marginLeft = '5px'
@@ -179,7 +179,7 @@ const app = () => {
           code: string
           name: string
         }
-        for (let item of org.value) {
+        for (const item of org.value) {
           if (orgElement.textContent === item.name) {
             matchedValue = item
             break
@@ -428,7 +428,7 @@ const app = () => {
   }
 
   function addBatchMentionForUser(lasteles: Element, position: InsertPosition, users: UserSelectFiledInfo) {
-    for (let item of users.value) {
+    for (const item of users.value) {
       lasteles.insertAdjacentHTML(position, stringFormat(appendUserStringFormat, item.code, item.id, item.name))
     }
   }
@@ -455,12 +455,12 @@ const app = () => {
   }
 
   function addBatchMentionForOrg(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledInfo) {
-    for (let item of orgs.value) {
+    for (const item of orgs.value) {
       addMentionForOrg(lasteles, position, item)
     }
   }
   function addBatchMentionForGroup(lasteles: Element, position: InsertPosition, orgs: OrgSelectFiledInfo) {
-    for (let item of orgs.value) {
+    for (const item of orgs.value) {
       addMentionForGroup(lasteles, position, item)
     }
   }
